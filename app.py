@@ -17,7 +17,8 @@ def init_db(user: str, password: str, host: str, name:str) -> SQLDatabase:
 
 def get_sql_chain(db, api_key, model_choice, model_provider):
     template = """
-    You are a data analyst. Generate SQL queries based on user questions using the provided database schema. Ensure queries are directly executable in an SQL database and do not include any formatting such as backticks.
+    You are a data analyst, in instruct mode. Generate SQL queries based on user questions using the provided database schema. 
+    Ensure queries are directly executable in an SQL database and do not include any formatting such as backticks.
 
     <SCHEMA>{schema}</SCHEMA>
 
@@ -144,13 +145,15 @@ with st.sidebar:
         # To read file as string:
         string_data = stringio.read()
 
-    model_provider = st.selectbox("Choose the model provider", ("OpenAI", "Groq"))
-    if model_provider == "OpenAI":
-        api_key = st.text_input("OpenAI API Key", type="password")
-        model_choice = st.selectbox("Model", ("gpt-4-0125-preview", "gpt-4-turbo", "gpt-3.5-turbo-0125"))
+    st.session_state.model_provider = st.selectbox("Choose the model provider", ("OpenAI", "Groq"))
+    if st.session_state.model_provider == "OpenAI":
+        st.session_state.api_key = st.text_input("OpenAI API Key", type="password")
+        st.session_state.model_choice = st.selectbox("Model", ("gpt-4-0125-preview", "gpt-4-turbo", "gpt-3.5-turbo-0125"))
     else:
-        api_key = st.text_input("Groq API Key", type="password")
-        model_choice = st.selectbox("Model", ("llama2-70b-4096", "mixtral-8x7b-32768", "gemma-7b-it"))
+        st.session_state.api_key = st.text_input("Groq API Key", type="password")
+        st.session_state.model_choice = st.selectbox("Model", ("llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"))
+
+    st.session_state.llm_output_mode = st.selectbox("Choose the output mode desired", ("Direct SQL", "Natural Language"))
 
     if st.button("Connect"):
         with st.spinner("Connecting to database..."):
@@ -182,14 +185,17 @@ if user_query is not None and user_query.strip() != "":
     
     with st.chat_message("AI"):
         # This retrieves the direct SQL query only
-        #sql_chain = get_sql_chain(st.session_state.db)
-        # response = sql_chain.invoke({
-        #     "chat_history": st.session_state.chat_history,
-        #     "question": user_query
-        # })
-
+        if st.session_state.llm_output_mode == "Direct SQL":
+            sql_chain = get_sql_chain(st.session_state.db, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
+            response = sql_chain.invoke({
+                "chat_history": st.session_state.chat_history,
+                "question": user_query
+            })
+            st.markdown(response)
+            
         # This retrieves the natural language from the generated SQL Query
-        response = get_response(user_query, st.session_state.db, st.session_state.chat_history, api_key, model_choice, model_provider)
-        st.markdown(response)
+        elif st.session_state.llm_output_mode == "Natural Language":
+            response = get_response(user_query, st.session_state.db, st.session_state.chat_history, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
+            st.markdown(response)
 
     st.session_state.chat_history.append(AIMessage(content=response))
