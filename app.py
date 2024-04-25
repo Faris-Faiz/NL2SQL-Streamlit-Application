@@ -7,6 +7,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
+from io import StringIO
+
 import os
 
 def init_db(user: str, password: str, host: str, name:str) -> SQLDatabase:
@@ -132,7 +134,16 @@ with st.sidebar:
     st.text_input("Password", value=db_password, type="password", key="Password")
     st.text_input("Host", value=db_host, key="Host")
     st.text_input("DB Name", value=db_name, key="DB Name")
-    
+    uploaded_file = st.file_uploader("Choose a file")
+    if uploaded_file is not None:
+        
+        # To convert to a string based IO:
+        stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+        # st.write(stringio)
+
+        # To read file as string:
+        string_data = stringio.read()
+
     model_provider = st.selectbox("Choose the model provider", ("OpenAI", "Groq"))
     if model_provider == "OpenAI":
         api_key = st.text_input("OpenAI API Key", type="password")
