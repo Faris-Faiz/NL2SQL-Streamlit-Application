@@ -72,8 +72,9 @@ def get_sql_chain(db, api_key, model_choice, model_provider):
 
 def get_response_with_rag(user_query, file, chat_history, api_key, model_choice, model_provider):
     if file is not None:
-        stringio = StringIO(file.getvalue().decode("utf-8"))
-        documents = stringio.read()
+        # stringio = StringIO(file.getvalue().decode("utf-8"))
+        # documents = stringio.read()
+        documents = [file.read().decode()]
         # Split documents into chunks
         text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
         texts = text_splitter.create_documents(documents)
