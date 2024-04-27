@@ -227,9 +227,9 @@ if user_query is not None and user_query.strip() != "":
         # This retrieves the natural language from the generated SQL Query
         elif st.session_state.llm_output_mode == "Natural Language":
             if uploaded_file is not None:
-              response = get_response_with_rag(user_query, uploaded_file, st.session_state.chat_history, api_key, model_choice, model_provider)
+              response = get_response_with_rag(user_query, uploaded_file, st.session_state.chat_history, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
             else:
-              response = get_response(user_query, st.session_state.db, st.session_state.chat_history, api_key, model_choice, model_provider)
-          st.markdown(response)
+              response = get_response(user_query, st.session_state.db, st.session_state.chat_history, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
+            st.markdown(response)
 
     st.session_state.chat_history.append(AIMessage(content=response))
