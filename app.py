@@ -7,6 +7,11 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
+from langchain.llms import OpenAI
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.chains import RetrievalQA
 from io import StringIO
 
 import os
@@ -66,6 +71,24 @@ def get_sql_chain(db, api_key, model_choice, model_provider):
         | StrOutputParser()
     )
 
+def get_response_with_rag(user_query, file, chat_history, api_key, model_choice, model_provider):
+    if file is not None:
+        # stringio = StringIO(file.getvalue().decode("utf-8"))
+        # documents = stringio.read()
+        documents = [file.read().decode()]
+        # Split documents into chunks
+        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+        texts = text_splitter.create_documents(documents)
+        # Select embeddings
+        embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+        # Create a vectorstore from documents
+        db = Chroma.from_documents(texts, embeddings)
+        # Create retriever interface
+        retriever = db.as_retriever()
+        # Create QA chain
+        qa = RetrievalQA.from_chain_type(llm=OpenAI(openai_api_key=api_key), chain_type='stuff', retriever=retriever)
+        return qa.run(user_query)
+    
 def get_response(user_query:str, db:SQLDatabase, chat_history: list, api_key, model_choice, model_provider):
     sql_chain = get_sql_chain(db, api_key, model_choice, model_provider)
 
@@ -122,7 +145,7 @@ st.title("Chat with MySQL")
 
 with st.sidebar:
     st.subheader("Settings")
-    st.write("This is a simple chat application using MySQL. Connect to the database and start chatting.")
+    st.write("This is a simple chat application using MySQL. Connect to the database or upload a file and start chatting.")
 
     # Button to clear the chat history
     if st.button("Clear Chat"):
@@ -135,15 +158,10 @@ with st.sidebar:
     st.text_input("Password", value=db_password, type="password", key="Password")
     st.text_input("Host", value=db_host, key="Host")
     st.text_input("DB Name", value=db_name, key="DB Name")
-    uploaded_file = st.file_uploader("Choose a file")
-    if uploaded_file is not None:
-        
-        # To convert to a string based IO:
-        stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
-        # st.write(stringio)
 
-        # To read file as string:
-        string_data = stringio.read()
+    
+    uploaded_file = st.file_uploader("Choose a file")
+    
 
     st.session_state.model_provider = st.selectbox("Choose the model provider", ("OpenAI", "Groq"))
     if st.session_state.model_provider == "OpenAI":
@@ -156,15 +174,18 @@ with st.sidebar:
     st.session_state.llm_output_mode = st.selectbox("Choose the output mode desired", ("Direct SQL", "Natural Language"))
 
     if st.button("Connect"):
-        with st.spinner("Connecting to database..."):
-            db = init_db(
-                st.session_state["User"],
-                st.session_state["Password"],
-                st.session_state["Host"],
-                st.session_state["DB Name"],
-            )
-            st.session_state.db = db
-            st.success("Connected to database!")
+        if uploaded_file is not None:
+            st.success("Uploaded file!")
+        else:
+            with st.spinner("Connecting to database..."):
+                db = init_db(
+                    st.session_state["User"],
+                    st.session_state["Password"],
+                    st.session_state["Host"],
+                    st.session_state["DB Name"],
+                )
+                st.session_state.db = db
+                st.success("Connected to database!")
 
 for message in st.session_state.chat_history:
     if isinstance(message, AIMessage):
@@ -185,6 +206,16 @@ if user_query is not None and user_query.strip() != "":
     
     with st.chat_message("AI"):
         # This retrieves the direct SQL query only
+        #sql_chain = get_sql_chain(st.session_state.db)
+        # response = sql_chain.invoke({
+        #     "chat_history": st.session_state.chat_history,
+        #     "question": user_query
+        # })
+            
+        # This retrieves the natural language from the generated SQL Query
+    
+        
+        
         if st.session_state.llm_output_mode == "Direct SQL":
             sql_chain = get_sql_chain(st.session_state.db, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
             response = sql_chain.invoke({
@@ -195,7 +226,10 @@ if user_query is not None and user_query.strip() != "":
             
         # This retrieves the natural language from the generated SQL Query
         elif st.session_state.llm_output_mode == "Natural Language":
-            response = get_response(user_query, st.session_state.db, st.session_state.chat_history, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
+            if uploaded_file is not None:
+              response = get_response_with_rag(user_query, uploaded_file, st.session_state.chat_history, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
+            else:
+              response = get_response(user_query, st.session_state.db, st.session_state.chat_history, st.session_state.api_key, st.session_state.model_choice, st.session_state.model_provider)
             st.markdown(response)
 
     st.session_state.chat_history.append(AIMessage(content=response))
